@@ -1,0 +1,64 @@
+test1_【問題69：ステートフルアプリとAuroraのスケール対応】問題文:企業がオンプレミスのデータセンターで2階層のWebベースアプリケーションを実行しています。アプリケーション層は、ステートフルアプリケーションを実行する単一サーバーで構成されています。アプリケーションは別サーバーで実行されているPostgreSQLデータベースに接続しています。アプリケーションのユーザーベースは大幅に増加すると予想されるため、企業はアプリケーションとデータベースをAWSに移行しています。このソリューションはAmazon_Aurora_PostgreSQL、Amazon_EC2_Auto_Scaling、Elastic_Load_Balancingを使用します。アプリケーション層とデータベース層の両方をスケールできる一貫したユーザー体験を提供するソリューションはどれでしょうか。選択肢:
+A:_Aurora_ReplicasでAurora_Auto_Scalingを有効化する。ラウンドロビンルーティングとスティッキーセッションを有効にしたApplication_Load_Balancerを使用する。
+B:_Aurora_ReplicasでAurora_Auto_Scalingを有効化する。最小未処理リクエストルーティングアルゴリズムとスティッキーセッションを有効にしたNetwork_Load_Balancerを使用する。
+C:_Aurora_ライターでAurora_Auto_Scalingを有効化する。ラウンドロビンルーティングアルゴリズムとスティッキーセッションを有効にしたApplication_Load_Balancerを使用する。
+D:_Aurora_ライターでAurora_Scalingを有効化する。最小未処理リクエストルーティングアルゴリズムとスティッキーセッションを有効にしたNetwork_Load_Balancerを使用する。
+
+
+正解は **A** です。
+
+この問題は、次の2点を別々に考えると解きやすくなります。
+
+1. ステートフルなアプリケーションをどうスケールするか
+2. Aurora PostgreSQLをどうスケールするか
+
+### アプリケーション層
+
+EC2 Auto Scalingによってサーバーが複数台になると、同じユーザーのリクエストが別のEC2へ振り分けられる可能性があります。
+
+このアプリケーションはステートフルなので、セッション情報が各サーバー内に保存されていると、接続先が変わった際にログイン状態などが失われる可能性があります。
+
+そこで使用するのが次の構成です。
+
+- Application Load Balancer
+- スティッキーセッション
+- ラウンドロビン
+
+最初のリクエストはラウンドロビンで分散し、その後はスティッキーセッションによって、同じユーザーを同じEC2インスタンスへ転送します。これにより、一貫したユーザー体験を維持できます。ALBがラウンドロビンとスティッキーセッションをサポートすることは、[AWS公式ドキュメント](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-target-group-attributes.html)でも確認できます。
+
+### データベース層
+
+Aurora Auto Scalingが増減させるのは、ライターではなくAurora Replica（リーダー）です。
+
+アクセス増加時にはリードレプリカを自動追加し、読み取り処理を分散できます。Aurora Auto Scalingはライターの負荷には適用されないことが、[AWS公式ドキュメント](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Integrating.AutoScaling.html)に明記されています。
+
+したがって、次の組み合わせであるAが正解です。
+
+> Aurora ReplicasのAuto Scaling  
+> ＋ ALBのラウンドロビン  
+> ＋ スティッキーセッション
+
+### 各選択肢の判断
+
+- **A：正解**
+  - Aurora ReplicaをAuto Scalingできる
+  - ALBでラウンドロビンとスティッキーセッションを利用できる
+
+- **B：誤り**
+  - Network Load Balancerを選んでいる
+  - WebアプリケーションのCookieベースのスティッキーセッションにはALBが適している
+  - 「最小未処理リクエスト」はALBで利用するルーティングアルゴリズム
+
+- **C：誤り**
+  - ALBの設定は適切
+  - ただし、Aurora Auto Scalingをライターに設定する部分が誤り
+
+- **D：誤り**
+  - AuroraライターをAuto Scalingする部分が誤り
+  - NLBと最小未処理リクエストの組み合わせも不適切
+
+覚え方は、以下のとおりです。
+
+- ステートフルなWebアプリ：**ALB＋スティッキーセッション**
+- Auroraの読み取りスケール：**Aurora Replica＋Aurora Auto Scaling**
+- Aurora Auto Scalingでは、**ライター数は増えない**

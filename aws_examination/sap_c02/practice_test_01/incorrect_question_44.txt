@@ -1,0 +1,42 @@
+test1_【問題44：AWS_IoT_Coreによる多数のIoTデバイス接続と証明書認証】問題文:企業がAWS_Cloudでソリューションを構築しています。数千のデバイスがソリューションに接続してデータを送信します。各デバイスはMQTTプロトコルを使用してリアルタイムでデータの送受信を行う必要があります。各デバイスは一意のX.509証明書を使用して認証する必要があります。最小の運用オーバーヘッドでこれらの要件を満たすソリューションはどれですか。選択肢:
+A:_AWS_IoT_Coreを設定する。各デバイスに対応するAmazon_MQキューを作成し、証明書をプロビジョニングする。各デバイスをAmazon_MQに接続する。
+B:_AWS_IoT_Coreを設定する。各デバイスに対応するAWS_IoT_thingを作成し、証明書をプロビジョニングする。各デバイスをAWS_IoT_Coreに接続する。
+C:_Amazon_API_Gateway_HTTP_APIとNetwork_Load_Balancer（NLB）を設定する。API_GatewayとNLB間の統合を作成する。HTTP_APIで相互TLS証明書認証機能を設定する。NLBがターゲットとするAmazon_EC2インスタンスでMQTTブローカーを実行する。各デバイスをNLBに接続する。
+D:_Network_Load_Balancer（NLB）を作成し、AWS_Lambda認証機能で設定する。Auto_Scalingグループ内のAmazon_EC2インスタンスでMQTTブローカーを実行する。Auto_ScalingグループをNLBのターゲットとして設定する。各デバイスをNLBに接続する。
+
+【正解】B
+
+【解説】
+この問題の要件は、次の3点です。
+
+1. 数千台のIoTデバイスを接続できること
+2. MQTTでリアルタイムにデータを送受信できること
+3. デバイスごとに一意のX.509証明書で認証し、運用負荷を最小化すること
+
+AWS IoT Coreは、多数のIoTデバイスを安全にクラウドへ接続するためのマネージドサービスです。MQTTのパブリッシュ／サブスクライブ通信を標準でサポートし、X.509クライアント証明書を使って各デバイスを認証できます。そのため、MQTTブローカーのEC2インスタンスを構築・スケーリング・保守する必要がありません。
+
+選択肢Bでは、各デバイスをAWS IoT Thingとして登録し、デバイスごとにX.509証明書をプロビジョニングしてAWS IoT Coreへ接続します。証明書にはIoTポリシーを関連付け、接続、トピックへのPublish、Subscribeなど、各デバイスに必要な権限を制御できます。
+
+【各選択肢の判断】
+
+A：誤り。AWS IoT Core自体にマネージドMQTTブローカーが含まれるため、デバイスごとにAmazon MQのキューを作成して接続する必要はありません。数千台分のキューを個別管理する構成は運用負荷も増加します。
+
+B：正しい。AWS IoT CoreはMQTTとX.509クライアント証明書認証をサポートしています。デバイスごとにIoT Thingと一意の証明書を用意することで、個別に認証・認可・管理でき、フルマネージドサービスのため運用負荷も最小になります。
+
+C：誤り。API GatewayのHTTP APIと相互TLSはHTTP通信用であり、デバイスのMQTT接続を処理するための構成ではありません。また、EC2上でMQTTブローカーを運用するため、パッチ適用、可用性、スケーリングなどを企業が管理する必要があります。
+
+D：誤り。NLBに「Lambda認証機能」を設定することはできません。さらに、EC2上のMQTTブローカーを自前で構築・運用するため、AWS IoT Coreを直接使用する構成より運用負荷が大きくなります。
+
+【処理の流れ】
+デバイス → X.509証明書で認証 → AWS IoT CoreのMQTTブローカー → MQTTトピックへPublish／Subscribe
+
+【覚え方】
+・多数のIoTデバイスをMQTTで接続する：AWS IoT Core
+・IoTデバイスを個別に表すリソース：IoT Thing
+・デバイス固有の認証：X.509クライアント証明書
+・デバイスの操作権限を制御する：AWS IoTポリシー
+・最小の運用オーバーヘッド：EC2上の自前ブローカーではなくマネージドサービス
+
+【参考：AWS公式ドキュメント】
+・MQTT：https://docs.aws.amazon.com/iot/latest/developerguide/mqtt.html
+・X.509クライアント証明書：https://docs.aws.amazon.com/iot/latest/developerguide/x509-client-certs.html

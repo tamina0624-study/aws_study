@@ -1,0 +1,81 @@
+test1_【問題38：競合の解消と無停止DB移行】問題文:企業がデータ分析環境をオンプレミスからAWSに
+移行したいと考えています。環境は2つのシンプルなNode.jsアプリケーションで構成されています。
+一方のアプリケーションはセンサーデータを収集してMySQLデータベースにロードします。
+もう一方のアプリケーションはデータをレポートに集約します。集約ジョブが実行されるとき、
+一部のロードジョブが正しく実行されません。企業はデータロードの問題を解決する必要があります。
+また、企業の顧客に対する中断や変更なしで移行を行う必要があります。これらの要件を満たすために、
+ソリューションアーキテクトは何をすべきでしょうか。選択肢:
+
+A:_Amazon_Aurora_MySQLデータベースを設定する。
+Aurora_MySQLデータベース用のAurora_Replicaを作成し、
+集約ジョブをAurora_Replicaに対して実行するよう移動する。
+収集エンドポイントをAmazon_Kinesisデータストリームとして設定する。
+Amazon_Kinesis_Data_FirehoseでAurora_MySQLデータベースにデータをレプリケートする。
+データベースが同期されたら、レプリケーションジョブを無効にし、
+Aurora_ReplicaをプライマリインスタンスとしてRestart。コレクターDNSレコードを
+Kinesisデータストリームに向ける。
+
+B:_Amazon_Aurora_MySQLデータベースを設定する。AWS_Database_Migration_Service（AWS_DMS）
+を使用して、オンプレミスデータベースからAuroraへの継続的データレプリケーションを実行する。
+集約ジョブをAurora_MySQLデータベースに対して実行するよう移動する。
+Auto_ScalingグループのAmazon_EC2インスタンスとしてApplication_Load_Balancer（ALB）
+の背後に収集エンドポイントを設定する。データベースが同期されたら、コレクターDNSレコードを
+ALBに向ける。オンプレミスからAWSへのカットオーバー後にAWS_DMS同期タスクを無効にする。
+
+C:_オンプレミスデータベースのレプリケーションターゲットとしてAmazon_Aurora_MySQLデータベース
+を設定する。Aurora_MySQLデータベース用のAurora_Replicaを作成し、集約ジョブをAurora_Replic
+aに対して実行するよう移動する。Network_Load_Balancer（NLB）の背後にあるAWS_Lambda関数として
+収集エンドポイントを設定し、Amazon_RDS_ProxyでAurora_MySQLデータベースに書き込みを行う。
+データベースが同期されたら、レプリケーションジョブを無効にし、Aurora_Replicaを
+プライマリインスタンスとしてRestart。コレクターDNSレコードをNLBに向ける。
+
+D:_Amazon_Aurora_MySQLデータベースを設定する。AWS_Database_Migration_Service（AWS_DMS）
+を使用して、オンプレミスデータベースからAuroraへの継続的データレプリケーションを実行する。
+Aurora_MySQLデータベース用のAurora_Replicaを作成し、集約ジョブをAurora_Replicaに対して
+実行するよう移動する。Application_Load_Balancer（ALB）の背後にあるAWS_Lambda関数として
+収集エンドポイントを設定し、Amazon_RDS_ProxyでAurora_MySQLデータベースに書き込みを行う。
+データベースが同期されたら、コレクターDNSレコードをALBに向ける。
+オンプレミスからAWSへのカットオーバー後にAWS_DMS同期タスクを無効にする。
+
+【正解】D
+
+【解説】
+この問題の要件は、次の2点です。
+
+1. データ収集（書き込み）と集約処理（読み取り）の競合を解消すること
+2. 顧客への中断やアプリケーション変更を最小限にしてAWSへ移行すること
+
+Aurora Replicaを作成し、読み取り負荷の大きい集約ジョブをReplicaで実行すれば、
+プライマリDBはセンサーデータの書き込みに集中できます。これにより、集約ジョブの実行中にロードジョブが
+失敗する問題を軽減できます。
+
+データ移行にはAWS DMSの継続的レプリケーション（フルロード＋CDC）を使用します。
+移行作業中もオンプレミスDBで発生した変更をAuroraへ継続的に反映できるため、
+同期を確認した後にDNSをALBへ切り替えることで、停止時間を最小限にしたカットオーバーが可能です。
+
+収集アプリケーションはALBからLambdaを呼び出す構成にできます。LambdaからAuroraへ
+接続する際にAmazon RDS Proxyを利用すると、DB接続をプールして再利用できるため、
+Lambdaの同時実行による大量のDB接続を効率的に管理できます。
+
+【各選択肢の判断】
+
+A：誤り。Kinesis Data FirehoseはAurora MySQLを直接の配信先としてサポートするサービス
+ではありません。また、Aurora Replicaをプライマリとして「再起動」するという切替手順も不適切です。
+
+B：誤り。DMSによる継続レプリケーションとALB配下のEC2構成は移行方法として成立しますが、
+集約ジョブをプライマリAuroraで実行するため、読み取り処理とデータロードが同じDBインスタンス上で競合する問題を十分に解消できません。
+
+C：誤り。NLBからLambda関数を直接ターゲットとして呼び出すことはできません。
+LambdaをターゲットにできるのはALBです。また、DMSによる継続レプリケーションが明示されておらず、
+無停止に近い移行方法として不十分です。
+
+D：正しい。DMSの継続レプリケーションで移行中の変更を同期し、Aurora Replicaへ集約処理を
+分離して書き込み競合を解消します。さらに、ALB＋Lambda＋RDS Proxyにより、
+既存の収集エンドポイントをDNS切替で移行でき、LambdaからAuroraへの接続も効率的に管理できます。
+
+【覚え方】
+・DB移行中も更新を同期する：AWS DMSのCDC
+・読み取り負荷をプライマリから分離する：Aurora Replica
+・ALBのターゲットにできるサーバーレス処理：Lambda
+・LambdaからRDS/Auroraへの接続急増を抑える：RDS Proxy
+

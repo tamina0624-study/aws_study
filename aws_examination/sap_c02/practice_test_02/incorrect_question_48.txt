@@ -1,0 +1,45 @@
+test2_【問題48：既存三層構成のAWS移行】問題文:オンプレミスのオーダー処理プラットフォームを
+AWSへリファクタリングしています。
+WebフロントエンドはVM群、メッセージングはRabbitMQ、バックエンドはKubernetesクラスターです。
+
+大きな変更なしで最小運用オーバーヘッドを実現するにはどうすべきですか。選択肢:
+A:_WebサーバーVMのAMIを作り、EC2_Auto_Scaling_GroupとALBを使い、Amazon_MQとAmazon_EKSを使う
+B:_WebサーバーをLambdaとAPI_Gatewayに置き換え、Amazon_SQSとAmazon_EKSを使う
+C:_WebサーバーVMのAMIを作り、EC2_Auto_Scaling_GroupとALBを使い、Amazon_MQと自己管理Kubernetesを使う
+D:_WebサーバーVMのAMIを作り、ALBを使い、Amazon_SQSとAmazon_EKSを使う
+
+【正解】A
+
+【解説】
+この問題のポイントは、「既存システムに大きな変更を加えないこと」と「運用オーバーヘッドを最小化すること」です。
+
+Webフロントエンドは既存のVMをAMI化し、EC2 Auto Scaling Groupで稼働させます。
+これにより、アプリケーションを大きく書き換えずにAWSへ移行でき、
+負荷に応じた台数調整や障害インスタンスの置き換えを自動化できます。
+ALBを組み合わせることで、複数のEC2インスタンスへリクエストを分散できます。
+
+既存のRabbitMQについては、RabbitMQ互換のマネージドメッセージブローカーであるAmazon MQを利用します。
+既存のメッセージング方式やプロトコルを維持しやすく、
+ブローカーを自前で構築・管理するよりも運用負荷を抑えられます。
+
+既存のKubernetesバックエンドにはAmazon EKSを利用します。
+EKSではKubernetesのコントロールプレーンをAWSが管理するため、
+自己管理Kubernetesよりも運用オーバーヘッドが小さくなります。
+
+【各選択肢の判断】
+A: 正解。既存のVM、RabbitMQ、Kubernetesの構成を大きく変えず、EC2 Auto Scaling、Amazon MQ、
+Amazon EKSによって運用を効率化できます。
+
+B: 不正解。VMベースのWebサーバーをLambdaとAPI Gatewayへ変更し、RabbitMQをSQSへ置き換えるには、
+アプリケーションやメッセージ処理方式の大幅な変更が必要です。
+
+C: 不正解。Web層とメッセージング層は要件に合いますが、Kubernetesを自己管理すると、
+コントロールプレーンの構築、更新、可用性確保などの運用負荷が増えます。
+
+D: 不正解。Amazon SQSはRabbitMQと同じプロトコルや機能をそのまま提供するサービスではないため、
+移行時にアプリケーションの変更が必要になる可能性があります。また、Auto Scaling Groupがないため、
+Webサーバーの自動スケーリングや障害時の自動置換も十分ではありません。
+
+【覚え方】
+変更を最小化する移行では、既存技術に近いAWSのマネージドサービスを選びます。
+VM → EC2 Auto Scaling、RabbitMQ → Amazon MQ、Kubernetes → Amazon EKS
